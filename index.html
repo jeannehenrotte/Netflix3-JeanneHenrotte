@@ -1,0 +1,425 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>My Favourite Movies</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
+    <style>
+        body { --primary: #5c709d; --secondary: #29b6f6; margin: 0px; font-family: 'Roboto', sans-serif;}
+        
+        button { 
+            -webkit-font-smoothing: antialiased;
+            display: inline-block;
+            margin: 2px;
+            color: var(--primary);
+            background: white;
+            border: 1px solid var(--primary);
+            height: 24px;
+            font-size: 11px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: ease-in 0.2s all;
+            padding: 0 10px;
+            border-radius: 8px;
+        }
+        button:hover { background: var(--primary); color: white; }
+
+        div#main { padding: 15px; max-width: 1200px; margin: 0 auto; }
+        input { margin-bottom: 5px; margin-top: 2px; padding: 6px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
+        
+        h1 { background: var(--primary); color: white; font-weight: 300; text-transform: uppercase; font-size: 20px; margin: 0px; padding: 15px; text-align: center; }
+        h2 { margin-block-start: 0px; margin-block-end: 10px; font-size: 20px; color: var(--primary); }
+        
+        div.actions { margin-top: 15px; margin-bottom: 15px; }
+        div.movie { display: inline-block; width: 200px; padding: 10px; box-shadow: 2px 2px 7px rgba(0,0,0,0.2); background: #5c709d; margin: 8px; border-radius: 8px; vertical-align: top; text-align: center; }
+        
+        div.movie div.movie-img { width: 200px; height: 280px; cursor: pointer; overflow: hidden; border-radius: 8px; background: #3c4b6e; }
+        div.movie div.movie-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+        
+        div.movie div.title { text-align: center; overflow: hidden; text-overflow: ellipsis; width: 200px; white-space: nowrap; color: white; font-weight: bold; margin: 8px 0; }
+        div.field { color: var(--primary); text-transform: uppercase; font-size: 12px; margin-top: 10px; font-weight: bold; }
+        
+        /* TMDb Search & Config Styling */
+        .config-box { background: #f0f4f8; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #d0d7de; }
+        .search-box { display: flex; gap: 8px; align-items: center; margin: 15px 0; }
+        .search-box input { flex: 1; padding: 8px; font-size: 14px; margin: 0; }
+        .grid-container { display: flex; flex-wrap: wrap; justify-content: center; }
+        .result-item { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; width: 200px; margin: 10px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; }
+        .result-item img { width: 100%; height: 280px; object-fit: cover; border-radius: 6px; }
+        .result-item .info { flex-grow: 1; margin: 8px 0; }
+        .result-item .title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 4px; }
+        .result-item .date { font-size: 11px; color: #666; }
+        .result-item .overview { font-size: 11px; color: #444; height: 45px; overflow: hidden; text-overflow: ellipsis; margin-top: 5px; }
+        .alert { padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+
+    <script type="text/javascript">
+
+        const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
+        let currentSearchResults = [];
+
+        const getApiKey = () => localStorage.getItem('tmdb_api_key') || '';
+
+        let initial_movies = [
+            { title: "Superlópez", director: "Javier Ruiz Caldera", thumbnail: "files/superlopez.png" },
+            { title: "Jurassic Park", director: "Steven Spielberg", thumbnail: "files/jurassicpark.png" },
+            { title: "Interstellar", director: "Christopher Nolan", thumbnail: "files/interstellar.png" }
+        ];
+
+        localStorage.my_movies = localStorage.my_movies || JSON.stringify(initial_movies);
+
+        const indexView = (movies) => {
+            let i = 0;
+            let view = "";
+
+            while(i < movies.length) {
+              view += `
+                <div class="movie">
+                   <div class="movie-img">
+                        <img data-my-id="${i}" src="${movies[i].thumbnail}" onerror="this.src='files/noimage.png'"/>
+                   </div>
+                   <div class="title">
+                       ${movies[i].title || "<em>No title</em>"}
+                   </div>
+                   <div class="actions">
+                        <button class="show" data-my-id="${i}">Show</button>
+                        <button class="delete" data-my-id="${i}">Delete</button>
+                        <button class="edit" data-my-id="${i}">Edit</button>
+                    </div>
+                </div>\n`;
+              i = i + 1;
+            };
+
+            view += `<div class="actions">
+                        <button class="new">New</button>
+                        <button class="search-view">Search TMDb</button>
+                        <button class="reset">Reset</button>
+                    </div>`;
+
+            return view;
+        };
+
+        const editView = (i, movie) => {
+            return `<h2>Edit Movie</h2>
+                <div class="field">Title <br>
+                <input type="text" id="title" placeholder="Title" value="${movie.title}"></div>
+                <div class="field">Director <br>
+                <input type="text" id="director" placeholder="Director" value="${movie.director}"></div>
+                <div class="field">Thumbnail <br>
+                <input type="text" id="thumbnail" placeholder="Thumbnail URL" value="${movie.thumbnail}"></div>
+                <div class="actions">
+                    <button class="update" data-my-id="${i}">Update</button>
+                    <button class="index">Back</button>
+                </div>`;
+        };
+
+        const showView = (movie) => {
+            return `<h2>${movie.title}</h2>
+                <div class="field">Director</div>
+                <div>${movie.director || "Unknown"}</div>
+                <div class="field">Thumbnail</div>
+                <div style="margin-top: 5px;"><img src="${movie.thumbnail}" width="200" style="border-radius: 8px;" onerror="this.src='files/noimage.png'"></div>
+                <div class="actions">
+                    <button class="index">Back</button>
+                </div>`;
+        };
+
+        const newView = () => {
+            return `<h2>Create Movie</h2>
+                <div class="field">Title <br>
+                <input type="text" id="title" placeholder="Title"></div>
+                <div class="field">Director <br>
+                <input type="text" id="director" placeholder="Director"></div>
+                <div class="field">Thumbnail <br>
+                <input type="text" id="thumbnail" placeholder="Thumbnail URL"></div>
+                <div class="actions">
+                    <button class="create">Create</button>
+                    <button class="index">Back</button>
+                </div>`;
+        };
+
+        const searchView = () => {
+            return `
+                <h2>Search or Explore TMDb Movies</h2>
+                <div class="config-box">
+                    <div class="field">API Read Access Token (Bearer)</div>
+                    <input type="password" id="api_key_input" value="${getApiKey()}" placeholder="Paste TMDb API Read Access Token..." style="width: 80%;">
+                    <button class="save-key">Save Key</button>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" id="search_query" placeholder="Enter movie title..." onkeydown="if(event.key === 'Enter') document.querySelector('.search').click()">
+                    <button class="search">Search</button>
+                    <button class="index">Back</button>
+                </div>
+                <div id="search_results"></div>
+            `;
+        };
+
+        const resultsView = (results) => {
+            if (!results || results.length === 0) {
+                return `<div class="alert alert-info">No movies found.</div>`;
+            }
+
+            let html = `<div class="grid-container">`;
+            results.forEach((movie) => {
+                const posterUrl = movie.poster_path 
+                    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
+                    : 'files/noimage.png';
+                
+                // CORRECTION 1 : Affichage de la date de sortie complète au lieu de l'année seule
+                const releaseDate = movie.release_date || 'N/A';
+
+                html += `
+                    <div class="result-item">
+                        <img src="${posterUrl}" alt="${movie.title}" onerror="this.src='files/noimage.png'">
+                        <div class="info">
+                            <div class="title">${movie.title}</div>
+                            <div class="date">Released: ${releaseDate}</div>
+                            <div class="overview">${movie.overview || "No description available."}</div>
+                        </div>
+                        <button class="add-from-api" data-tmdb-id="${movie.id}">Add to My List</button>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+            return html;
+        };
+
+        // CONTROLLERS 
+        const indexContr = () => {
+            let my_movies = JSON.parse(localStorage.my_movies);
+            document.getElementById('main').innerHTML = indexView(my_movies);
+        };
+
+        const showContr = (i) => {
+            let movie = JSON.parse(localStorage.my_movies)[i];
+            document.getElementById('main').innerHTML = showView(movie);
+        };
+
+        const newContr = () => {
+            document.getElementById('main').innerHTML = newView();
+        };
+
+        const createContr = () => {
+            let my_movies = JSON.parse(localStorage.my_movies);
+            let newMovie = {
+                title: document.getElementById('title').value,
+                director: document.getElementById('director').value,
+                thumbnail: document.getElementById('thumbnail').value
+            };
+            my_movies.push(newMovie);
+            localStorage.my_movies = JSON.stringify(my_movies);
+            indexContr();
+        };
+
+        const editContr = (i) => {
+            let movie = JSON.parse(localStorage.my_movies)[i];
+            document.getElementById('main').innerHTML = editView(i, movie);
+        };
+
+        const updateContr = (i) => {
+            let my_movies = JSON.parse(localStorage.my_movies);
+            my_movies[i].title     = document.getElementById('title').value;
+            my_movies[i].director  = document.getElementById('director').value;
+            my_movies[i].thumbnail = document.getElementById('thumbnail').value;
+            localStorage.my_movies = JSON.stringify(my_movies);
+            indexContr();
+        };
+
+        const deleteContr = (i) => {
+            if (confirm("Are you sure you want to delete this movie?")) {
+                let my_movies = JSON.parse(localStorage.my_movies);
+                my_movies.splice(i, 1);
+                localStorage.my_movies = JSON.stringify(my_movies);
+                indexContr();
+            }
+        };
+
+        const resetContr = () => {
+            localStorage.my_movies = JSON.stringify(initial_movies);
+            indexContr();
+        };
+
+        const searchViewContr = async () => {
+            document.getElementById('main').innerHTML = searchView();
+            
+            const token = getApiKey();
+            if (token) {
+                const resultsContainer = document.getElementById('search_results');
+                resultsContainer.innerHTML = `<p>Loading popular movies...</p>`;
+
+                try {
+                    const response = await fetch('https://api.themoviedb.org/3/movie/popular', {
+                        method: 'GET',
+                        headers: {
+                            accept: 'application/json',
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentSearchResults = data.results || [];
+                        resultsContainer.innerHTML = `<h3>Most Popular Movies right now</h3>` + resultsView(currentSearchResults);
+                    } else {
+                        resultsContainer.innerHTML = `<div class="alert alert-error">Failed to load popular movies. Check your API token.</div>`;
+                    }
+                } catch (err) {
+                    console.error("Fetch Error:", err);
+                    resultsContainer.innerHTML = `<div class="alert alert-error">Network error while fetching popular movies.</div>`;
+                }
+            } else {
+                document.getElementById('search_results').innerHTML = `<div class="alert alert-info">Please enter and save your API token above to view popular movies.</div>`;
+            }
+        };
+
+        const saveKeyContr = () => {
+            const key = document.getElementById('api_key_input').value.trim();
+            localStorage.setItem('tmdb_api_key', key);
+            alert("API Key saved successfully!");
+            searchViewContr();
+        };
+
+        const searchContr = async (query) => {
+            const resultsContainer = document.getElementById('search_results');
+            
+            if (!query || query.trim() === "") {
+                resultsContainer.innerHTML = `<div class="alert alert-error">Please enter a valid movie title.</div>`;
+                return;
+            }
+
+            const token = getApiKey();
+            if (!token) {
+                resultsContainer.innerHTML = `<div class="alert alert-error">Please enter and save your TMDb API Read Access Token above.</div>`;
+                return;
+            }
+
+            resultsContainer.innerHTML = `<p>Searching TMDb...</p>`;
+
+            const options = {
+                method: 'GET',
+                headers: {
+                    accept: 'application/json',
+                    Authorization: `Bearer ${token}`
+                }
+            };
+
+            try {
+                const response = await fetch(`https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query.trim())}`, options);
+                
+                if (!response.ok) {
+                    throw new Error(`API Error HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                currentSearchResults = data.results || [];
+                resultsContainer.innerHTML = `<h3>Search Results</h3>` + resultsView(currentSearchResults);
+
+            } catch (err) {
+                console.error("Fetch Error:", err);
+                resultsContainer.innerHTML = `<div class="alert alert-error">Failed to connect to TMDb API. Check your network or API token.</div>`;
+            }
+        };
+
+        const addFromAPIContr = async (tmdbId, buttonEl) => {
+            const selectedMovie = currentSearchResults.find(m => m.id === tmdbId);
+            if (!selectedMovie) return;
+
+            let my_movies = JSON.parse(localStorage.my_movies);
+
+            // CORRECTION 2 : Vérification des doublons par ID TMDb (et par titre uniquement pour les films ajoutés manuellement sans ID)
+            const exists = my_movies.some(m => 
+                m.tmdbId === tmdbId || 
+                (!m.tmdbId && m.title.toLowerCase() === selectedMovie.title.toLowerCase())
+            );
+
+            if (exists) {
+                alert(`"${selectedMovie.title}" is already in your local collection.`);
+                return;
+            }
+
+            buttonEl.disabled = true;
+            buttonEl.innerText = "Loading...";
+
+            let directorName = "TMDb Import";
+            const token = getApiKey();
+            if (token) {
+                try {
+                    const response = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}/credits`, {
+                        method: 'GET',
+                        headers: {
+                            accept: 'application/json',
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+                    if (response.ok) {
+                        const creditsData = await response.json();
+                        const director = creditsData.crew?.find(person => person.job === "Director");
+                        if (director) {
+                            directorName = director.name;
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error fetching director:", err);
+                }
+            }
+
+            // On sauvegarde aussi tmdbId dans l'objet du film local
+            const newMovie = {
+                tmdbId: selectedMovie.id,
+                title: selectedMovie.title,
+                director: directorName,
+                thumbnail: selectedMovie.poster_path 
+                    ? `https://image.tmdb.org/t/p/w500${selectedMovie.poster_path}` 
+                    : "files/noimage.png"
+            };
+
+            buttonEl.innerText = "Added!";
+
+            my_movies.push(newMovie);
+            localStorage.my_movies = JSON.stringify(my_movies);
+
+            setTimeout(() => {
+                buttonEl.disabled = false;
+                buttonEl.innerText = "Add to My List";
+            }, 1500);
+        };
+
+        // EVENT ROUTER
+        const matchEvent = (ev, sel) => ev.target.matches(sel);
+        const myId = (ev) => Number(ev.target.dataset.myId);
+
+        document.addEventListener('click', ev => {
+            if      (matchEvent(ev, '.index'))       indexContr();
+            else if (matchEvent(ev, '.edit'))        editContr(myId(ev));
+            else if (matchEvent(ev, '.update'))      updateContr(myId(ev));
+            else if (matchEvent(ev, '.new'))         newContr();
+            else if (matchEvent(ev, '.reset'))       resetContr();
+            else if (matchEvent(ev, '.show'))        showContr(myId(ev));
+            else if (matchEvent(ev, '.delete'))      deleteContr(myId(ev));
+            else if (matchEvent(ev, '.create'))      createContr();
+            else if (matchEvent(ev, '.search-view')) searchViewContr();
+            else if (matchEvent(ev, '.save-key'))    saveKeyContr();
+            else if (matchEvent(ev, '.search')) {
+                const query = document.getElementById('search_query').value;
+                searchContr(query);
+            }
+            else if (matchEvent(ev, '.add-from-api')) {
+                const tmdbId = Number(ev.target.dataset.tmdbId);
+                addFromAPIContr(tmdbId, ev.target);
+            }
+        });
+
+        // Initialization        
+        document.addEventListener('DOMContentLoaded', indexContr);
+    </script>
+</head>
+
+<body>
+    <h1>My Favourite Movies</h1>
+    <div id="main"> <!-- The view is included here --> </div>
+</body>
+</html>

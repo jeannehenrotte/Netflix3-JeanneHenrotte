@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TMDb Popular Movies</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f9;
+    }
+    h1 {
+      text-align: center;
+      color: #0d253f; /* TMDb dark blue theme */
+    }
+    #movie-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+    .movie-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      width: 200px;
+      overflow: hidden;
+      text-align: center;
+      padding-bottom: 10px;
+    }
+    .movie-card img {
+      width: 100%;
+      height: auto;
+    }
+    .movie-card h3 {
+      font-size: 16px;
+      margin: 10px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Popular Movies</h1>
+  <div id="movie-container"></div>
+
+  <script>
+    const API_KEY = '43ea483f131bea02c39d97de6b1864cc';
+    const URL = `https://api.themoviedb.org/3/movie/popular?api_key=${API_KEY}&language=en-US&page=1`;
+
+    // Select the container where movies will be displayed
+    const container = document.getElementById('movie-container');
+
+    fetch(URL)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log("Successfully connected to TMDb API!");
+        console.log("Popular Movies Data:", data);
+
+        // Loop through the array of movies (data.results)
+        data.results.forEach(movie => {
+          // Create a container div for each movie
+          const card = document.createElement('div');
+          card.classList.add('movie-card');
+
+          // TMDb image base URL for posters
+          const posterUrl = movie.poster_path 
+            ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
+            : 'https://via.placeholder.com/200x300?text=No+Image';
+
+          // Set the inner HTML of the card with the poster and title
+          card.innerHTML = `
+            <img src="${posterUrl}" alt="${movie.title} Poster">
+            <h3>${movie.title}</h3>
+          `;
+
+          // Append the card to the main movie container on the page
+          container.appendChild(card);
+        });
+      })
+      .catch(error => {
+        console.error("Error connecting to TMDb API:", error);
+        container.innerHTML = `<p style="color: red; text-align: center;">Failed to load movies.</p>`;
+      });
+  </script>
+
+</body>
+</html>
