@@ -50,6 +50,10 @@
         .result-item .title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 4px; }
         .result-item .date { font-size: 11px; color: #666; }
         .result-item .overview { font-size: 11px; color: #444; height: 45px; overflow: hidden; text-overflow: ellipsis; margin-top: 5px; }
+        .card-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+        .keyword-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+        .keyword-badge { background: white; border: 1px solid #d0d7de; border-radius: 20px; padding: 6px 12px; display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .keyword-badge span { font-size: 13px; font-weight: 500; color: #333; }
         .alert { padding: 10px; border-radius: 4px; margin: 10px 0; }
         .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .alert-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
@@ -69,13 +73,40 @@
         ];
 
         localStorage.my_movies = localStorage.my_movies || JSON.stringify(initial_movies);
+        localStorage.my_keywords = localStorage.my_keywords || JSON.stringify([]);
+
+        const cleanKeyword = (keyword) => {
+            return keyword
+                .replace(/[^a-zñáéíóú0-9 ]+/igm, "") // Remove special characters
+                .trim()                                // Remove leading and trailing spaces
+                .toLowerCase();                        // Convert to lowercase
+        };
+
+        const processKeywords = (rawKeywords) => {
+            const processedList = [];
+            if (!Array.isArray(rawKeywords)) return processedList;
+
+            for (let i = 0; i < rawKeywords.length; i++) {
+                const rawName = rawKeywords[i].name || "";
+                const cleaned = cleanKeyword(rawName);
+                // Keep only non-empty unique keywords
+                if (cleaned.length > 0 && !processedList.includes(cleaned)) {
+                    processedList.push(cleaned);
+                }
+            }
+            return processedList;
+        };
 
         const indexView = (movies) => {
             let i = 0;
             let view = "";
 
             while(i < movies.length) {
-              view += `
+                const kwBtn = movies[i].tmdbId 
+                    ? `<button class="keywords" data-tmdb-id="${movies[i].tmdbId}" data-movie-title="${movies[i].title}">Keywords</button>` 
+                    : '';
+
+                view += `
                 <div class="movie">
                    <div class="movie-img">
                         <img data-my-id="${i}" src="${movies[i].thumbnail}" onerror="this.src='files/noimage.png'"/>
@@ -95,6 +126,7 @@
             view += `<div class="actions">
                         <button class="new">New</button>
                         <button class="search-view">Search TMDb</button>
+                        <button class="my-keywords">My Keywords</button>
                         <button class="reset">Reset</button>
                     </div>`;
 
@@ -116,7 +148,11 @@
         };
 
         const showView = (movie) => {
-            return `<h2>${movie.title}</h2>
+            const kwBtn = movie.tmdbId 
+                ? `<button class="keywords" data-tmdb-id="${movie.tmdbId}" data-movie-title="${movie.title}">Extract Keywords</button>` 
+                : '';
+            return 
+                `<h2>${movie.title}</h2>
                 <div class="field">Director</div>
                 <div>${movie.director || "Unknown"}</div>
                 <div class="field">Thumbnail</div>
@@ -181,11 +217,77 @@
                             <div class="overview">${movie.overview || "No description available."}</div>
                         </div>
                         <button class="add-from-api" data-tmdb-id="${movie.id}">Add to My List</button>
+                        <button class="keywords" data-tmdb-id="${movie.id}" data-movie-title="${movie.title.replace(/"/g, '&quot;')}">View Keywords</button>
                     </div>
                 `;
             });
             html += `</div>`;
             return html;
+        };
+
+        const keywordsView = (movieTitle, cleanedKeywords) => {
+            const savedKeywords = JSON.parse(localStorage.my_keywords || "[]");
+
+            let content = '';
+            if (cleanedKeywords.length === 0) {
+                content = `<div class="alert alert-info">No keywords found for this movie.</div>`;
+            } else {
+                content = `<div class="keyword-list">`;
+                cleanedKeywords.forEach(kw => {
+                    const isSaved = savedKeywords.includes(kw);
+                    content += `
+                        <div class="keyword-badge">
+                            <span>#${kw}</span>
+                            <button class="add-keyword" data-keyword="${kw}" ${isSaved ? 'disabled' : ''}>
+                                ${isSaved ? 'Saved' : 'Add to my list'}
+                            </button>
+                        </div>
+                    `;
+                });
+                content += `</div>`;
+            }
+
+            return `
+                <h2>Keywords for "${movieTitle}"</h2>
+                <p style="font-size: 13px; color: #555;">Keywords extracted from TMDb, normalized (lowercase), and cleaned with Regular Expressions:</p>
+                ${content}
+                <div class="actions">
+                    <button class="my-keywords">My Keywords List (${savedKeywords.length})</button>
+                    <button class="search-view">Back to Search</button>
+                    <button class="index">Home</button>
+                </div>
+            `;
+        };
+
+        const myKeywordsView = () => {
+            const savedKeywords = JSON.parse(localStorage.my_keywords || "[]");
+
+            let content = '';
+            if (savedKeywords.length === 0) {
+                content = `<div class="alert alert-info">Your custom keyword list is currently empty. Extract keywords from any movie to add them here!</div>`;
+            } else {
+                content = `<div class="keyword-list">`;
+                savedKeywords.forEach((kw, idx) => {
+                    content += `
+                        <div class="keyword-badge">
+                            <span>#${kw}</span>
+                            <button class="search-by-kw" data-keyword="${kw}" title="Search movies with this keyword">Search</button>
+                            <button class="remove-keyword danger" data-kw-index="${idx}">Remove</button>
+                        </div>
+                    `;
+                });
+                content += `</div>`;
+            }
+
+            return `
+                <h2>My Custom Keywords List</h2>
+                <p style="font-size: 13px; color: #555;">Manage your saved keywords or click "Search" to discover matching movies on TMDb.</p>
+                ${content}
+                <div class="actions">
+                    <button class="search-view">Search TMDb</button>
+                    <button class="index">Home</button>
+                </div>
+            `;
         };
 
         // CONTROLLERS 
@@ -388,6 +490,78 @@
             }, 1500);
         };
 
+        const keywordsContr = async (movieId, movieTitle = "Selected Movie") => {
+            const token = getApiKey();
+            const mainContainer = document.getElementById('main');
+
+            if (!token) {
+                alert("Please enter and save your TMDb API Read Access Token first.");
+                searchViewContr();
+                return;
+            }
+
+            mainContainer.innerHTML = `<p>Extracting keywords from TMDb...</p>`;
+
+            // Détection automatique : long token (Bearer) vs clé courte (paramètre ?api_key=)
+            const isBearerToken = token.length > 40;
+            const url = isBearerToken 
+                ? `https://api.themoviedb.org/3/movie/${movieId}/keywords`
+                : `https://api.themoviedb.org/3/movie/${movieId}/keywords?api_key=${encodeURIComponent(token)}`;
+
+            const options = {
+                method: 'GET',
+                headers: isBearerToken 
+                    ? { accept: 'application/json', Authorization: `Bearer ${token}` }
+                    : { accept: 'application/json' }
+            };
+
+            try {
+                const response = await fetch(url, options);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error ${response.status}`);
+                }
+
+                const data = await response.json();
+                const cleanedKeywords = processKeywords(data.keywords || []);
+                mainContainer.innerHTML = keywordsView(movieTitle, cleanedKeywords);
+
+            } catch (err) {
+                console.error("Keywords Fetch Error:", err);
+                mainContainer.innerHTML = `
+                    <div class="alert alert-error">Failed to fetch keywords (${err.message}). Please check your API key/token.</div>
+                    <button class="index">Back</button>
+                `;
+            }
+        };
+
+          const addKeywordToList = (keyword, buttonEl) => {
+            let my_keywords = JSON.parse(localStorage.my_keywords || "[]");
+            const normalized = cleanKeyword(keyword);
+
+            if (!my_keywords.includes(normalized)) {
+                my_keywords.push(normalized);
+                localStorage.my_keywords = JSON.stringify(my_keywords);
+                if (buttonEl) {
+                    buttonEl.disabled = true;
+                    buttonEl.innerText = "Saved";
+                }
+            } else {
+                alert(`"${normalized}" is already in your custom keyword list.`);
+            }
+        };
+
+        const removeKeywordContr = (index) => {
+            let my_keywords = JSON.parse(localStorage.my_keywords || "[]");
+            my_keywords.splice(index, 1);
+            localStorage.my_keywords = JSON.stringify(my_keywords);
+            myKeywordsContr();
+        };
+
+        const myKeywordsContr = () => {
+            document.getElementById('main').innerHTML = myKeywordsView();
+        };
+
         // EVENT ROUTER
         const matchEvent = (ev, sel) => ev.target.matches(sel);
         const myId = (ev) => Number(ev.target.dataset.myId);
@@ -410,6 +584,29 @@
             else if (matchEvent(ev, '.add-from-api')) {
                 const tmdbId = Number(ev.target.dataset.tmdbId);
                 addFromAPIContr(tmdbId, ev.target);
+            }
+
+             else if (matchEvent(ev, '.keywords')) {
+                const tmdbId = Number(ev.target.dataset.tmdbId);
+                const movieTitle = ev.target.dataset.movieTitle || "Movie";
+                keywordsContr(tmdbId, movieTitle);
+            }
+            else if (matchEvent(ev, '.add-keyword')) {
+                const keyword = ev.target.dataset.keyword;
+                addKeywordToList(keyword, ev.target);
+            }
+            else if (matchEvent(ev, '.my-keywords')) {
+                myKeywordsContr();
+            }
+            else if (matchEvent(ev, '.remove-keyword')) {
+                const idx = Number(ev.target.dataset.kwIndex);
+                removeKeywordContr(idx);
+            }
+            else if (matchEvent(ev, '.search-by-kw')) {
+                const kw = ev.target.dataset.keyword;
+                document.getElementById('main').innerHTML = searchView();
+                document.getElementById('search_query').value = kw;
+                searchContr(kw);
             }
         });
 
