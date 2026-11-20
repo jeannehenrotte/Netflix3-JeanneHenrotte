@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <title>My Favourite Movies</title>
@@ -23,6 +23,9 @@
             border-radius: 8px;
         }
         button:hover { background: var(--primary); color: white; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        button.danger { border-color: #d9534f; color: #d9534f; }
+        button.danger:hover { background: #d9534f; color: white; }
 
         div#main { padding: 15px; max-width: 1200px; margin: 0 auto; }
         input { margin-bottom: 5px; margin-top: 2px; padding: 6px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
@@ -62,14 +65,15 @@
     <script type="text/javascript">
 
         const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
+        const FALLBACK_IMG = "https://placehold.co/200x300?text=No+Image";
         let currentSearchResults = [];
 
         const getApiKey = () => localStorage.getItem('tmdb_api_key') || '';
 
         let initial_movies = [
-            { title: "Superlópez", director: "Javier Ruiz Caldera", thumbnail: "files/superlopez.png" },
-            { title: "Jurassic Park", director: "Steven Spielberg", thumbnail: "files/jurassicpark.png" },
-            { title: "Interstellar", director: "Christopher Nolan", thumbnail: "files/interstellar.png" }
+            { tmdbId: 499772, title: "Superlópez", director: "Javier Ruiz Caldera", thumbnail: "https://image.tmdb.org/t/p/w500/8A2M1aC1R6iB3z4k2b9l5m8n7o.jpg" },
+            { tmdbId: 329, title: "Jurassic Park", director: "Steven Spielberg", thumbnail: "https://image.tmdb.org/t/p/w500/oU7Oq2kFAAlGqbU4VoAE36g4hoI.jpg" },
+            { tmdbId: 157336, title: "Interstellar", director: "Christopher Nolan", thumbnail: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg" }
         ];
 
         localStorage.my_movies = localStorage.my_movies || JSON.stringify(initial_movies);
@@ -89,7 +93,6 @@
             for (let i = 0; i < rawKeywords.length; i++) {
                 const rawName = rawKeywords[i].name || "";
                 const cleaned = cleanKeyword(rawName);
-                // Keep only non-empty unique keywords
                 if (cleaned.length > 0 && !processedList.includes(cleaned)) {
                     processedList.push(cleaned);
                 }
@@ -109,7 +112,7 @@
                 view += `
                 <div class="movie">
                    <div class="movie-img">
-                        <img data-my-id="${i}" src="${movies[i].thumbnail}" onerror="this.src='files/noimage.png'"/>
+                        <img data-my-id="${i}" class="show" src="${movies[i].thumbnail}" onerror="this.onerror=null; this.src='${FALLBACK_IMG}';"/>
                    </div>
                    <div class="title">
                        ${movies[i].title || "<em>No title</em>"}
@@ -118,6 +121,7 @@
                         <button class="show" data-my-id="${i}">Show</button>
                         <button class="delete" data-my-id="${i}">Delete</button>
                         <button class="edit" data-my-id="${i}">Edit</button>
+                        ${kwBtn}
                     </div>
                 </div>\n`;
               i = i + 1;
@@ -151,13 +155,14 @@
             const kwBtn = movie.tmdbId 
                 ? `<button class="keywords" data-tmdb-id="${movie.tmdbId}" data-movie-title="${movie.title}">Extract Keywords</button>` 
                 : '';
-            return 
-                `<h2>${movie.title}</h2>
+
+            return `<h2>${movie.title}</h2>
                 <div class="field">Director</div>
                 <div>${movie.director || "Unknown"}</div>
                 <div class="field">Thumbnail</div>
-                <div style="margin-top: 5px;"><img src="${movie.thumbnail}" width="200" style="border-radius: 8px;" onerror="this.src='files/noimage.png'"></div>
+                <div style="margin-top: 5px;"><img src="${movie.thumbnail}" width="200" style="border-radius: 8px;" onerror="this.onerror=null; this.src='${FALLBACK_IMG}';"></div>
                 <div class="actions">
+                    ${kwBtn}
                     <button class="index">Back</button>
                 </div>`;
         };
@@ -188,6 +193,7 @@
                 <div class="search-box">
                     <input type="text" id="search_query" placeholder="Enter movie title..." onkeydown="if(event.key === 'Enter') document.querySelector('.search').click()">
                     <button class="search">Search</button>
+                    <button class="my-keywords">My Keywords</button>
                     <button class="index">Back</button>
                 </div>
                 <div id="search_results"></div>
@@ -202,22 +208,23 @@
             let html = `<div class="grid-container">`;
             results.forEach((movie) => {
                 const posterUrl = movie.poster_path 
-                    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
-                    : 'files/noimage.png';
+                    ? `${TMDB_IMAGE_BASE}${movie.poster_path}` 
+                    : FALLBACK_IMG;
                 
-                // CORRECTION 1 : Affichage de la date de sortie complète au lieu de l'année seule
                 const releaseDate = movie.release_date || 'N/A';
 
                 html += `
                     <div class="result-item">
-                        <img src="${posterUrl}" alt="${movie.title}" onerror="this.src='files/noimage.png'">
+                        <img src="${posterUrl}" alt="${movie.title}" onerror="this.onerror=null; this.src='${FALLBACK_IMG}';">
                         <div class="info">
                             <div class="title">${movie.title}</div>
                             <div class="date">Released: ${releaseDate}</div>
                             <div class="overview">${movie.overview || "No description available."}</div>
                         </div>
-                        <button class="add-from-api" data-tmdb-id="${movie.id}">Add to My List</button>
-                        <button class="keywords" data-tmdb-id="${movie.id}" data-movie-title="${movie.title.replace(/"/g, '&quot;')}">View Keywords</button>
+                        <div class="card-actions">
+                            <button class="add-from-api" data-tmdb-id="${movie.id}">Add to My List</button>
+                            <button class="keywords" data-tmdb-id="${movie.id}" data-movie-title="${movie.title.replace(/"/g, '&quot;')}">View Keywords</button>
+                        </div>
                     </div>
                 `;
             });
@@ -310,7 +317,7 @@
             let newMovie = {
                 title: document.getElementById('title').value,
                 director: document.getElementById('director').value,
-                thumbnail: document.getElementById('thumbnail').value
+                thumbnail: document.getElementById('thumbnail').value || FALLBACK_IMG
             };
             my_movies.push(newMovie);
             localStorage.my_movies = JSON.stringify(my_movies);
@@ -432,7 +439,6 @@
 
             let my_movies = JSON.parse(localStorage.my_movies);
 
-            // CORRECTION 2 : Vérification des doublons par ID TMDb (et par titre uniquement pour les films ajoutés manuellement sans ID)
             const exists = my_movies.some(m => 
                 m.tmdbId === tmdbId || 
                 (!m.tmdbId && m.title.toLowerCase() === selectedMovie.title.toLowerCase())
@@ -469,14 +475,13 @@
                 }
             }
 
-            // On sauvegarde aussi tmdbId dans l'objet du film local
             const newMovie = {
                 tmdbId: selectedMovie.id,
                 title: selectedMovie.title,
                 director: directorName,
                 thumbnail: selectedMovie.poster_path 
-                    ? `https://image.tmdb.org/t/p/w500${selectedMovie.poster_path}` 
-                    : "files/noimage.png"
+                    ? `${TMDB_IMAGE_BASE}${selectedMovie.poster_path}` 
+                    : FALLBACK_IMG
             };
 
             buttonEl.innerText = "Added!";
@@ -502,7 +507,6 @@
 
             mainContainer.innerHTML = `<p>Extracting keywords from TMDb...</p>`;
 
-            // Détection automatique : long token (Bearer) vs clé courte (paramètre ?api_key=)
             const isBearerToken = token.length > 40;
             const url = isBearerToken 
                 ? `https://api.themoviedb.org/3/movie/${movieId}/keywords`
@@ -535,7 +539,7 @@
             }
         };
 
-          const addKeywordToList = (keyword, buttonEl) => {
+        const addKeywordToList = (keyword, buttonEl) => {
             let my_keywords = JSON.parse(localStorage.my_keywords || "[]");
             const normalized = cleanKeyword(keyword);
 
@@ -585,8 +589,7 @@
                 const tmdbId = Number(ev.target.dataset.tmdbId);
                 addFromAPIContr(tmdbId, ev.target);
             }
-
-             else if (matchEvent(ev, '.keywords')) {
+            else if (matchEvent(ev, '.keywords')) {
                 const tmdbId = Number(ev.target.dataset.tmdbId);
                 const movieTitle = ev.target.dataset.movieTitle || "Movie";
                 keywordsContr(tmdbId, movieTitle);
